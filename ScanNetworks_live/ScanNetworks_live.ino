@@ -30,27 +30,27 @@
   defined(ARDUINO_NRF52_ITSYBITSY)
   // Configure the pins used for the ESP32 connection
   #define SPIWIFI       SPI  // The SPI port
-  #define SPIWIFI_SS    13   // Chip select pin
-  #define ESP32_RESETN  12   // Reset pin
-  #define SPIWIFI_ACK   11   // a.k.a BUSY or READY pin
+  #define SPIWIFI_SS    2   // Chip select pin
+  #define ESP32_RESETN  4   // Reset pin
+  #define SPIWIFI_ACK   3   // a.k.a BUSY or READY pin
   #define ESP32_GPIO0   -1
 #elif defined(ARDUINO_AVR_FEATHER328P)
   #define SPIWIFI       SPI  // The SPI port
-  #define SPIWIFI_SS     4   // Chip select pin
-  #define ESP32_RESETN   3   // Reset pin
-  #define SPIWIFI_ACK    2   // a.k.a BUSY or READY pin
+  #define SPIWIFI_SS     2   // Chip select pin
+  #define ESP32_RESETN   4   // Reset pin
+  #define SPIWIFI_ACK    3   // a.k.a BUSY or READY pin
   #define ESP32_GPIO0   -1
 #elif defined(TEENSYDUINO)
   #define SPIWIFI       SPI  // The SPI port
-  #define SPIWIFI_SS     5   // Chip select pin
-  #define ESP32_RESETN   6   // Reset pin
-  #define SPIWIFI_ACK    9   // a.k.a BUSY or READY pin
+  #define SPIWIFI_SS     2   // Chip select pin
+  #define ESP32_RESETN   4   // Reset pin
+  #define SPIWIFI_ACK    3   // a.k.a BUSY or READY pin
   #define ESP32_GPIO0   -1
 #elif defined(ARDUINO_NRF52832_FEATHER )
   #define SPIWIFI       SPI  // The SPI port
-  #define SPIWIFI_SS    16   // Chip select pin
-  #define ESP32_RESETN  15   // Reset pin
-  #define SPIWIFI_ACK    7   // a.k.a BUSY or READY pin
+  #define SPIWIFI_SS    2   // Chip select pin
+  #define ESP32_RESETN  4   // Reset pin
+  #define SPIWIFI_ACK    3   // a.k.a BUSY or READY pin
   #define ESP32_GPIO0   -1
 #elif !defined(SPIWIFI_SS)   // if the wifi definition isnt in the board variant
   // Don't change the names of these #define's! they match the variant ones
