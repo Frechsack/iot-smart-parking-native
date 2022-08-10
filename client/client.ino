@@ -48,6 +48,10 @@
 
 int wifi_status = WL_IDLE_STATUS;
 
+enum DeviceTypeName{
+  LAMP, PARKING_GUIDE_LAMP, CWO_SENSOR, SERVO
+  };
+
 WiFiClient wifi_client;
 MQTTClient mqtt_client;
 
@@ -66,8 +70,46 @@ void connect() {
   mqtt_client.subscribe("scan",1);
 }
 
+String device_type_name_to_string (const DeviceTypeName jshs) {
+  if (jshs == LAMP) {
+    return "LAMP";
+  }
+
+  else if (jshs == PARKING_GUIDE_LAMP){
+    return "PARKING_GUIDE_LAMP";
+    }
+  else if (jshs == CWO_SENSOR){
+    return "CWO_SENSOR";
+    }
+  else{
+    return "SERVO"; 
+    }
+  };
+
+
+void scan(){};
+void instruction(const String &mac, const String &instruction){};
+void registering(const String &mac, const DeviceTypeName &device_type, const int &parking_lot_number, const String &parent_mac){
+  String parking_lot_number_as_string = parking_lot_number == -1? "": parking_lot_number+"";
+  
+  String message = mac + ":" + device_type_name_to_string(device_type) + ": " + parking_lot_number_as_string + ": " + parent_mac;
+  mqtt_client.publish("register", message);
+  }
+
 void message_received(String &topic, String &payload) {
-  Serial.println("incoming: " + topic + " - " + payload);
+  if (topic == "scan") {
+    scan();
+    Serial.println("received something on scan-lane");
+  }
+
+  else {
+    int payload_finder = payload.indexOf(":");
+    String mac = payload.substring(0, (payload_finder -1));
+    String instruction = payload.substring(payload_finder+1);
+    Serial.println("received on instruction-lane for mac: " + mac + " the instruction: " + instruction);
+    }
+  
+  
 }
 
 
