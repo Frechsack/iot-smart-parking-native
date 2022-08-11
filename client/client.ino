@@ -46,79 +46,163 @@
   #define ESP32_GPIO0   -1   // Not connected
 #endif
 
-int wifi_status = WL_IDLE_STATUS;
-
-enum DeviceTypeName{
+enum DeviceTypeName {
   LAMP, PARKING_GUIDE_LAMP, CWO_SENSOR, SERVO
-  };
+};
 
+struct DeviceConfiguration {
+  String mac;
+  DeviceTypeName type;
+  int parking_lot_nr;
+  String parent_mac;
+  boolean is_input;
+  boolean is_analog;
+  int pin;
+  String latest_status;
+};
+
+const String NULL_STRING = "";
+const int NULL_INT = -1;
+
+const int DEVICES_LENGTH = 1;
+DeviceConfiguration DEVICES[DEVICES_LENGTH] = {
+  {"LAMP1", LAMP, NULL_INT, NULL_STRING, false, false, 10, ""}
+};
+
+
+int wifi_status = WL_IDLE_STATUS;
 WiFiClient wifi_client;
 MQTTClient mqtt_client;
 
-void connect() {
-  Serial.print("Check WiFi status: ");
-  while (WiFi.status() != WL_CONNECTED) 
-    delay(1000);
-  Serial.println("done");
+/**
+ * Konvertiert ein enum des Typs "DeviceTypeName" in einen String.
+ * @param jshs Der zu konvertierende Typ.
+ * @returns Gibt den entsprechenden String zurück.
+ */
+String device_type_name_to_string (const DeviceTypeName jshs) {
+  if (jshs == LAMP) 
+    return "LAMP";
+  if (jshs == PARKING_GUIDE_LAMP)
+    return "PARKING_GUIDE_LAMP";
+  if (jshs == CWO_SENSOR)
+    return "CWO_SENSOR";
+  else
+    return "SERVO"; 
+};
 
-  Serial.print("Connect Mqtt-Broker: ");
-  while (!mqtt_client.connect("",false))
-    delay(1000);
-  Serial.println("done");
+/**
+ * Es wurde eine "scan"-Anweisung per MQTT erhalten.
+ */
+void reveive_scan(){
+  // Verschicke jedes Gerät per MQTT
+  for(int i = 0; i < DEVICES_LENGTH; i++)
+    send_register(DEVICES[i].mac,DEVICES[i].type,DEVICES[i].parking_lot_nr, DEVICES[i].parent_mac);
+};
 
-  mqtt_client.subscribe("instruction",1);
-  mqtt_client.subscribe("scan",1);
+/**
+ * Es wurde eine "instruction"-Anweisung per MQTT erhalten.
+ * @param mac Das Gerät, welches geschalten werden soll.
+ * @param instruction Der neue anzunehmende Zustand.
+ */
+void receive_instruction(const String &mac, const String &instruction){
+  // Prüfe ob Gerät auf diesem Board
+   for(int i = 0; i < DEVICES_LENGTH; i++) {
+    if(DEVICES[i].mac != mac) 
+      continue;
+    // TODO: Setze Status
+    DEVICES[i].latest_status = instruction;
+    break;  
+  }
+};
+
+/**
+ * Sendet den Status eines Geräts per MQTT.
+ * @param mac Das Gerät, dessen Status übermittelt wird.
+ * @param status Der zu sendende Status des Geräts.
+ */
+void send_status(const String &mac, const String &status){
+  mqtt_client.publish("status", mac + ":" + status);
 }
 
-String device_type_name_to_string (const DeviceTypeName jshs) {
-  if (jshs == LAMP) {
-    return "LAMP";
-  }
-
-  else if (jshs == PARKING_GUIDE_LAMP){
-    return "PARKING_GUIDE_LAMP";
-    }
-  else if (jshs == CWO_SENSOR){
-    return "CWO_SENSOR";
-    }
-  else{
-    return "SERVO"; 
-    }
-  };
-
-
-void scan(){};
-void instruction(const String &mac, const String &instruction){};
-void registering(const String &mac, const DeviceTypeName &device_type, const int &parking_lot_number, const String &parent_mac){
-  String parking_lot_number_as_string = parking_lot_number == -1? "": parking_lot_number+"";
-  
-  String message = mac + ":" + device_type_name_to_string(device_type) + ": " + parking_lot_number_as_string + ": " + parent_mac;
+/**
+ * Sendet eine Registrierung.
+ * @param mac Die Mac des zu registrierenden Geräts.
+ * @param device_type Der Gerätetyp.
+ * @param parking_lot_nr Die optionale Parkplatznummer.
+ * @param parent_mac Das optionale übergeordnete Gerät.
+ */
+void send_register(const String &mac, const DeviceTypeName &device_type, const int &parking_lot_number, const String &parent_mac){
+  String parking_lot_number_as_string = parking_lot_number == NULL_INT ? "": parking_lot_number+"";
+  String parent_mac_as_string = parent_mac == NULL_STRING ? "" : parent_mac;
+  String message = mac + ":" + device_type_name_to_string(device_type) + ": " + parking_lot_number_as_string + ": " + parent_mac_as_string;
   mqtt_client.publish("register", message);
-  }
+}
 
+/**
+ * Eine Nachricht wurde per MQTT empfangen.
+ * @param topic Die lane.
+ * @param payload Die empfangende Nachricht.
+ */
 void message_received(String &topic, String &payload) {
   if (topic == "scan") {
-    scan();
+    reveive_scan();
     Serial.println("received something on scan-lane");
   }
-
   else {
     int payload_finder = payload.indexOf(":");
     String mac = payload.substring(0, (payload_finder -1));
     String instruction = payload.substring(payload_finder+1);
+    receive_instruction(mac,instruction);
     Serial.println("received on instruction-lane for mac: " + mac + " the instruction: " + instruction);
-    }
-  
-  
+  }
 }
 
-
-void setup() {
-  Serial.begin(9600);
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
+/**
+ * Prüft ob die Gerätekonfiguration gültig ist.
+ * @return Gibt true zurück, sollte die Konfiguration stimmen, ansonten false.
+ */
+boolean is_device_configuration_valid(){
+  Serial.print("Check device configurations: ");
+   
+  for(int i = 0; i < DEVICES_LENGTH; i++) 
+  {
+    const DeviceConfiguration &lhs = DEVICES[i];
+    for(int y = 0; y < DEVICES_LENGTH; y++){
+      const DeviceConfiguration &rhs = DEVICES[y];
+      if(y == i) 
+        continue;
+      // Prüfe ob Mac unique
+      if(rhs.mac == lhs.mac){
+        Serial.println("Invalid, mac: " + lhs.mac +  " is not unique.");
+        return false;
+      }
+    }
+    // Prüfe ob pin gültig
+    if(lhs.pin <= 0){
+       Serial.println("Invalid, device with mac: " + lhs.mac +  " has invalid pin.");
+       return false;
+    }
   }
+  Serial.println("done");
+  return true;
+}
 
+/**
+ * Konfiguriert den Arduino für alle Geräte.
+ * Sollte die Gerätekonfiguration ungültig sein, wird das Programm beendet.
+ */
+void setup_devices(){
+  if(!is_device_configuration_valid()) 
+    exit(1);
+  // Registriere Geräte
+  for(int i = 0; i < DEVICES_LENGTH; i++)
+    pinMode(DEVICES[i].pin, DEVICES[i].is_input ?  INPUT : OUTPUT);
+}
+
+/**
+ * Konfiguriert das WiFi-Modul und stellt eine Verbindung zum WLAN her.
+ */
+void setup_wifi(){
   // Registriere WiFi-Modul
   WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
   while (WiFi.status() == WL_NO_MODULE) {
@@ -134,16 +218,49 @@ void setup() {
     delay(100);
   } while (wifi_status != WL_CONNECTED);
   Serial.println("done");
-  
+}
+
+/**
+ * Initialisiert den MQTT-Client.
+ */
+void setup_mqtt(){
   mqtt_client.begin(MQTT_BROKER, wifi_client);
   mqtt_client.onMessage(message_received);
+  connect_mqtt();
+}
 
-  connect();
+/**
+ * Verbindet den initialsierten MQTT-Client mit dem MQTT-Broker.
+ */
+void connect_mqtt() {
+  Serial.print("Check WiFi status: ");
+  while (WiFi.status() != WL_CONNECTED) 
+    delay(1000);
+  Serial.println("done");
+
+  Serial.print("Connect Mqtt-Broker: ");
+  while (!mqtt_client.connect("",false))
+    delay(1000);
+  Serial.println("done");
+
+  mqtt_client.subscribe("instruction",1);
+  mqtt_client.subscribe("scan",1);
+}
+
+void setup() {
+  Serial.begin(1000);
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
+  }
+  setup_devices();
+  setup_wifi();
+  setup_mqtt();
 }
 
 void loop() {
   if (!mqtt_client.connected()) 
-    connect();
-
+    connect_mqtt();
   mqtt_client.loop();
+
+  // TODO: Geräte updates senden
 }
