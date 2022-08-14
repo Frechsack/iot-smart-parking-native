@@ -1,3 +1,5 @@
-#define WIFI_SSID "TP-Link_B24D"
-#define WIFI_PASS "87258400"
-#define MQTT_BROKER "192.168.0.2"
+//#define WIFI_SSID "TP-Link_B24D"
+//#define WIFI_PASS "87258400"
+#define WIFI_SSID "FrechLan"
+#define WIFI_PASS "ctx#3942!"
+#define MQTT_BROKER "192.168.0.164"

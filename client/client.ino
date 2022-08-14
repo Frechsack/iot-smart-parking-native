@@ -64,9 +64,10 @@ struct DeviceConfiguration {
 const String NULL_STRING = "";
 const int NULL_INT = -1;
 
-const int DEVICES_LENGTH = 1;
+const int DEVICES_LENGTH = 2;
 DeviceConfiguration DEVICES[DEVICES_LENGTH] = {
-  {"LAMP1", LAMP, NULL_INT, NULL_STRING, false, false, 10, ""}
+  {"LAMP1", LAMP, NULL_INT, NULL_STRING, false, false, 10, ""},
+  {"LAMP2", LAMP, 1, "LAMP1", false, false, 10, ""}
 };
 
 
@@ -94,9 +95,18 @@ String device_type_name_to_string (const DeviceTypeName jshs) {
  * Es wurde eine "scan"-Anweisung per MQTT erhalten.
  */
 void reveive_scan(){
-  // Verschicke jedes Gerät per MQTT
+  // Verschicke zuerst nur jene ohne parent
   for(int i = 0; i < DEVICES_LENGTH; i++)
-    send_register(DEVICES[i].mac,DEVICES[i].type,DEVICES[i].parking_lot_nr, DEVICES[i].parent_mac);
+    if(DEVICES[i].parent_mac == NULL_STRING)
+      send_register(DEVICES[i].mac,DEVICES[i].type,DEVICES[i].parking_lot_nr, DEVICES[i].parent_mac); 
+
+  delay(2000);
+
+    // Dann jene mit parent
+  for(int i = 0; i < DEVICES_LENGTH; i++)
+    if(DEVICES[i].parent_mac != NULL_STRING)
+      send_register(DEVICES[i].mac,DEVICES[i].type,DEVICES[i].parking_lot_nr, DEVICES[i].parent_mac);   
+  
 };
 
 /**
@@ -132,9 +142,9 @@ void send_status(const String &mac, const String &status){
  * @param parent_mac Das optionale übergeordnete Gerät.
  */
 void send_register(const String &mac, const DeviceTypeName &device_type, const int &parking_lot_number, const String &parent_mac){
-  String parking_lot_number_as_string = parking_lot_number == NULL_INT ? "": parking_lot_number+"";
+  String parking_lot_number_as_string = parking_lot_number == NULL_INT ? "": String(parking_lot_number);
   String parent_mac_as_string = parent_mac == NULL_STRING ? "" : parent_mac;
-  String message = mac + ":" + device_type_name_to_string(device_type) + ": " + parking_lot_number_as_string + ": " + parent_mac_as_string;
+  String message = mac + ":" + device_type_name_to_string(device_type) + ":" + parking_lot_number_as_string + ":" + parent_mac_as_string;
   mqtt_client.publish("register", message);
 }
 
@@ -248,7 +258,7 @@ void connect_mqtt() {
 }
 
 void setup() {
-  Serial.begin(1000);
+  Serial.begin(9600);
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }
@@ -263,4 +273,10 @@ void loop() {
   mqtt_client.loop();
 
   // TODO: Geräte updates senden
+  // Kleiner Test
+  int rand = random(10000);
+  if(rand <= 1){
+    int deviceIndex = random(DEVICES_LENGTH);
+    send_status(DEVICES[deviceIndex].mac, String(random(10)));  
+  }
 }
