@@ -2,6 +2,8 @@
 #include <SPI.h>
 #include <WiFiNINA.h>
 #include "properties.h"
+#include <Servo.h>
+#include <Adafruit_NeoPixel.h>
 
 // Configure the pins used for the ESP32 connection
 #if defined(ADAFRUIT_FEATHER_M4_EXPRESS) || \
@@ -50,24 +52,32 @@ enum DeviceTypeName {
   LAMP, PARKING_GUIDE_LAMP, CWO_SENSOR, SERVO
 };
 
+enum PhyisicalDeviceTypeName {
+  PHYSICAL_SERVO, ADAFRUIT_NEOPIXEL
+};
+
 struct DeviceConfiguration {
   String mac;
   DeviceTypeName type;
+  PhyisicalDeviceTypeName physical_type;
   int parking_lot_nr;
   String parent_mac;
   boolean is_input;
   boolean is_analog;
   int pin;
   String latest_status;
+  int neopixel_position;
 };
+
+ Servo servo;
 
 const String NULL_STRING = "";
 const int NULL_INT = -1;
 
-const int DEVICES_LENGTH = 2;
+const int DEVICES_LENGTH = 1;
 DeviceConfiguration DEVICES[DEVICES_LENGTH] = {
-  {"LAMP1", LAMP, NULL_INT, NULL_STRING, false, false, 10, ""},
-  {"LAMP2", LAMP, 1, "LAMP1", false, false, 10, ""}
+  {"SV1", SERVO, PHYSICAL_SERVO, NULL_INT, NULL_STRING, true, true, 46, NULL_STRING, NULL_INT},
+  {"PG1", PARKING_GUIDE_LAMP, ADAFRUIT_NEOPIXEL, NULL_INT, NULL_STRING, true, true, 22, NULL_STRING, 1},
 };
 
 
@@ -119,19 +129,37 @@ void receive_instruction(const String &mac, const String &instruction){
    for(int i = 0; i < DEVICES_LENGTH; i++) {
     if(DEVICES[i].mac != mac) 
       continue;
-    // TODO: Setze Status
+
+    if(DEVICES[i].physical_type == PHYSICAL_SERVO){
+      control_servo(DEVICES[i],instruction);  
+    }
+  
+    
     DEVICES[i].latest_status = instruction;
     break;  
   }
 };
+
+void control_servo(const DeviceConfiguration &device, const String &instruction){
+  servo.attach(device.pin);
+  if(instruction == "true") {
+    servo.writeMicroseconds(1900); 
+    send_status(device.mac,"true");
+   }
+   else {
+    servo.writeMicroseconds(1000);
+    send_status(device.mac,"false");
+   }
+}
+
 
 /**
  * Sendet den Status eines Geräts per MQTT.
  * @param mac Das Gerät, dessen Status übermittelt wird.
  * @param status Der zu sendende Status des Geräts.
  */
-void send_status(const String &mac, const String &status){
-  mqtt_client.publish("status", mac + ":" + status);
+void send_status(const String &mac, const String &payload){
+  mqtt_client.publish("status", mac + ":" + payload);
 }
 
 /**
@@ -154,13 +182,14 @@ void send_register(const String &mac, const DeviceTypeName &device_type, const i
  * @param payload Die empfangende Nachricht.
  */
 void message_received(String &topic, String &payload) {
+  
   if (topic == "scan") {
     reveive_scan();
     Serial.println("received something on scan-lane");
   }
-  else {
+  else if(topic == "instruction") {
     int payload_finder = payload.indexOf(":");
-    String mac = payload.substring(0, (payload_finder -1));
+    String mac = payload.substring(0, payload_finder);
     String instruction = payload.substring(payload_finder+1);
     receive_instruction(mac,instruction);
     Serial.println("received on instruction-lane for mac: " + mac + " the instruction: " + instruction);
@@ -202,11 +231,16 @@ boolean is_device_configuration_valid(){
  * Sollte die Gerätekonfiguration ungültig sein, wird das Programm beendet.
  */
 void setup_devices(){
-  if(!is_device_configuration_valid()) 
-    exit(1);
+  //if(!is_device_configuration_valid()) 
+  //  exit(1);
   // Registriere Geräte
-  for(int i = 0; i < DEVICES_LENGTH; i++)
+  for(int i = 0; i < DEVICES_LENGTH; i++){
     pinMode(DEVICES[i].pin, DEVICES[i].is_input ?  INPUT : OUTPUT);
+    if(DEVICES[i].physical_type == PHYSICAL_SERVO) {
+      control_servo(DEVICES[i],"false");
+    }
+  }
+    
 }
 
 /**
@@ -274,9 +308,11 @@ void loop() {
 
   // TODO: Geräte updates senden
   // Kleiner Test
+  /*
   int rand = random(10000);
   if(rand <= 1){
     int deviceIndex = random(DEVICES_LENGTH);
     send_status(DEVICES[deviceIndex].mac, String(random(10)));  
   }
+  */
 }
