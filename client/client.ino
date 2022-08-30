@@ -2,82 +2,95 @@
 #include <SPI.h>
 #include <WiFiNINA.h>
 #include "properties.h"
+#include <Arduino.h>
 #include <Servo.h>
 #include <Adafruit_NeoPixel.h>
 
-// Configure the pins used for the ESP32 connection
-#if defined(ADAFRUIT_FEATHER_M4_EXPRESS) || \
-  defined(ADAFRUIT_FEATHER_M0) || \
-  defined(ADAFRUIT_FEATHER_M0_EXPRESS) || \
-  defined(ARDUINO_AVR_FEATHER32U4) || \
-  defined(ARDUINO_NRF52840_FEATHER) || \
-  defined(ADAFRUIT_ITSYBITSY_M0) || \
-  defined(ADAFRUIT_ITSYBITSY_M4_EXPRESS) || \
-  defined(ARDUINO_AVR_ITSYBITSY32U4_3V) || \
-  defined(ARDUINO_NRF52_ITSYBITSY)
-  // Configure the pins used for the ESP32 connection
-  #define SPIWIFI       SPI  // The SPI port
-  #define SPIWIFI_SS    2   // Chip select pin
-  #define ESP32_RESETN  4   // Reset pin
-  #define SPIWIFI_ACK   3   // a.k.a BUSY or READY pin
-  #define ESP32_GPIO0   -1
-#elif defined(ARDUINO_AVR_FEATHER328P)
-  #define SPIWIFI       SPI  // The SPI port
-  #define SPIWIFI_SS     2   // Chip select pin
-  #define ESP32_RESETN   4   // Reset pin
-  #define SPIWIFI_ACK    3   // a.k.a BUSY or READY pin
-  #define ESP32_GPIO0   -1
-#elif defined(TEENSYDUINO)
-  #define SPIWIFI       SPI  // The SPI port
-  #define SPIWIFI_SS     2   // Chip select pin
-  #define ESP32_RESETN   4   // Reset pin
-  #define SPIWIFI_ACK    3   // a.k.a BUSY or READY pin
-  #define ESP32_GPIO0   -1
-#elif defined(ARDUINO_NRF52832_FEATHER )
-  #define SPIWIFI       SPI  // The SPI port
-  #define SPIWIFI_SS    2   // Chip select pin
-  #define ESP32_RESETN  4   // Reset pin
-  #define SPIWIFI_ACK    3   // a.k.a BUSY or READY pin
-  #define ESP32_GPIO0   -1
-#elif !defined(SPIWIFI_SS)   // if the wifi definition isnt in the board variant
-  // Don't change the names of these #define's! they match the variant ones
-  #define SPIWIFI       SPI
-  #define SPIWIFI_SS    2   // Chip select pin
-  #define SPIWIFI_ACK    3   // a.k.a BUSY or READY pin
-  #define ESP32_RESETN   4   // Reset pin
-  #define ESP32_GPIO0   -1   // Not connected
-#endif
-
-enum DeviceTypeName {
-  LAMP, PARKING_GUIDE_LAMP, CWO_SENSOR, SERVO
+/**
+ * Die verfügbaren logischen Gerätetypen.
+ */
+enum LogicalType {
+  ENTER_BARRIER, EXIT_BARRIER, LAMP, PARKING_GUIDE_LAMP, CWO_SENSOR, MOTION_SENSOR
 };
 
-enum PhyisicalDeviceTypeName {
-  PHYSICAL_SERVO, ADAFRUIT_NEOPIXEL
+/**
+ * Die tatsächlich verwendeten Geräte.
+ */
+enum PhyisicalType {
+  SERVO, ADAFRUIT_NEOPIXEL
 };
 
-struct DeviceConfiguration {
+
+struct Device {
+  
+  /**
+   * Die mac des Geräts.
+   */
   String mac;
-  DeviceTypeName type;
-  PhyisicalDeviceTypeName physical_type;
-  int parking_lot_nr;
-  String parent_mac;
-  boolean is_input;
-  boolean is_analog;
+  
+  /**
+   * Der abstrakte Gerätetyp.
+   */
+  LogicalType logical_type;
+  
+  /**
+   * Der physische Gerätetyp.
+   */
+  PhyisicalType physical_type;
+
+  /**
+   * Der verwendete Pin des Geräts.
+   */
   int pin;
-  String latest_status;
-  int neopixel_position;
+
+  /**
+   * Der optionale Identifier des Geräts.
+   */
+  int* identifier;
+  
+  /**
+   * Die optionale Parkplatzzuordnung.
+   */
+  int* parking_lot_nr;
+  /**
+   * Das optionale Elternelement.
+   */
+  String* parent_mac;
+
+  /**
+   * Der letzte Status dieses Geräts.
+   */
+  String* latest_status;
+  
+  /**
+   * Die Neopixel steuerung, sollte das Gerät auf einem Neopixelband sitzen.
+   */
+  Adafruit_NeoPixel* neopixel;
+  
+  /**
+   * Sie Servo-Setuerung, sollte das Gerät ein Servomotor sein.
+   */
+  Servo* servo;
+
+  /**
+   * Die Anzahl an Pixeln auf dem Neopixelband.
+   */
+  int* neopixel_pixel_count;
 };
 
- Servo servo;
+/**
+ * Die Anzahl an virtuellen Geräten.
+ */
+const int DEVICES_LENGTH = 3;
 
-const String NULL_STRING = "";
-const int NULL_INT = -1;
-
-const int DEVICES_LENGTH = 1;
-DeviceConfiguration DEVICES[DEVICES_LENGTH] = {
-  {"SV1", SERVO, PHYSICAL_SERVO, NULL_INT, NULL_STRING, true, true, 46, NULL_STRING, NULL_INT},
-  {"PG1", PARKING_GUIDE_LAMP, ADAFRUIT_NEOPIXEL, NULL_INT, NULL_STRING, true, true, 22, NULL_STRING, 1},
+/**
+ * Die Virtuellen Geräte.
+ */
+Device DEVICES[DEVICES_LENGTH] = {
+  {"PG1",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(1),NULL,NULL,NULL,NULL,NULL,new int(20)},
+  {"PG2",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(2),NULL,new String("PG1"),NULL,NULL,NULL,new int(20)},
+  {"PG3",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(3),NULL,new String("PG2"),NULL,NULL,NULL,new int(20)}
+  //{"S1",ENTER_BARRIER,SERVO,46,NULL,NULL,NULL,NULL,NULL,NULL}
 };
 
 
@@ -87,18 +100,21 @@ MQTTClient mqtt_client;
 
 /**
  * Konvertiert ein enum des Typs "DeviceTypeName" in einen String.
- * @param jshs Der zu konvertierende Typ.
+ * @param type Der zu konvertierende Typ.
  * @returns Gibt den entsprechenden String zurück.
  */
-String device_type_name_to_string (const DeviceTypeName jshs) {
-  if (jshs == LAMP) 
+String logical_type_to_string (const LogicalType& type) {
+  if (type == ENTER_BARRIER) 
+    return "ENTER_BARRIER";
+  if (type == EXIT_BARRIER)
+    return "EXIT_BARRIER";
+  if (type == LAMP)
     return "LAMP";
-  if (jshs == PARKING_GUIDE_LAMP)
+  if (type == PARKING_GUIDE_LAMP)
     return "PARKING_GUIDE_LAMP";
-  if (jshs == CWO_SENSOR)
+  if (type == CWO_SENSOR)
     return "CWO_SENSOR";
-  else
-    return "SERVO"; 
+  return "MOTION_SENSOR"; 
 };
 
 /**
@@ -107,15 +123,13 @@ String device_type_name_to_string (const DeviceTypeName jshs) {
 void reveive_scan(){
   // Verschicke zuerst nur jene ohne parent
   for(int i = 0; i < DEVICES_LENGTH; i++)
-    if(DEVICES[i].parent_mac == NULL_STRING)
-      send_register(DEVICES[i].mac,DEVICES[i].type,DEVICES[i].parking_lot_nr, DEVICES[i].parent_mac); 
-
+    if(DEVICES[i].parent_mac == NULL)
+      send_register(DEVICES[i].mac,DEVICES[i].logical_type,DEVICES[i].parking_lot_nr, DEVICES[i].parent_mac); 
   delay(2000);
-
-    // Dann jene mit parent
+  // Dann jene mit parent
   for(int i = 0; i < DEVICES_LENGTH; i++)
-    if(DEVICES[i].parent_mac != NULL_STRING)
-      send_register(DEVICES[i].mac,DEVICES[i].type,DEVICES[i].parking_lot_nr, DEVICES[i].parent_mac);   
+    if(DEVICES[i].parent_mac != NULL)
+      send_register(DEVICES[i].mac,DEVICES[i].logical_type,DEVICES[i].parking_lot_nr, DEVICES[i].parent_mac);   
   
 };
 
@@ -127,28 +141,60 @@ void reveive_scan(){
 void receive_instruction(const String &mac, const String &instruction){
   // Prüfe ob Gerät auf diesem Board
    for(int i = 0; i < DEVICES_LENGTH; i++) {
-    if(DEVICES[i].mac != mac) 
+    Device &device = DEVICES[i];
+    if(device.mac != mac) 
       continue;
-
-    if(DEVICES[i].physical_type == PHYSICAL_SERVO){
-      control_servo(DEVICES[i],instruction);  
+    // Abhängig von Gerätetyp schalten
+    if(device.logical_type == ENTER_BARRIER || device.logical_type == EXIT_BARRIER  ){
+      servo_instruction(device,instruction);  
     }
-  
-    
-    DEVICES[i].latest_status = instruction;
+    else if(device.physical_type == ADAFRUIT_NEOPIXEL){
+      neopixel_instruction(device,instruction);
+    }
+
+    delete device.latest_status;
+    device.latest_status = new String(instruction);
     break;  
   }
 };
 
-void control_servo(const DeviceConfiguration &device, const String &instruction){
-  servo.attach(device.pin);
+/**
+ * Gibt Anweisung an einen Servo zu schalten.
+ * @param device Das zu schaltende Gerät.
+ * @þaram instruction Der anzunehmende Zustand.
+ */
+void servo_instruction(const Device &device, const String &instruction){
   if(instruction == "true") {
-    servo.writeMicroseconds(1900); 
+    device.servo->writeMicroseconds(1900); 
     send_status(device.mac,"true");
    }
-   else {
-    servo.writeMicroseconds(1000);
+   else if(instruction == "false") {
+    device.servo->writeMicroseconds(1000);
     send_status(device.mac,"false");
+   }
+   else {
+    Serial.println("Error: Invalid instruction for device, type: \"SERVO\", instruction: \"" + instruction +  "\"");
+   }
+}
+
+/**
+ * Gibt Anweisung an eine Neopixel Lampe zu schalten.
+ * @param device Das zu schaltende Gerät.
+ * @þaram instruction Der anzunehmende Zustand.
+ */
+void neopixel_instruction(const Device &device, const String &instruction){
+  if(instruction == "true") {
+    device.neopixel->setPixelColor(*device.identifier,device.neopixel->Color(100,100,100));
+    device.neopixel->show();
+    send_status(device.mac,"true");
+   }
+   else if(instruction == "false") {
+    device.neopixel->setPixelColor(*device.identifier,device.neopixel->Color(0,0,0));
+    device.neopixel->show();
+    send_status(device.mac,"false");
+   }
+   else {
+    Serial.println("Error: Invalid instruction for device, type: \"ADAFRUIT_NEOPIXEL\", instruction: \"" + instruction +  "\"");
    }
 }
 
@@ -158,8 +204,8 @@ void control_servo(const DeviceConfiguration &device, const String &instruction)
  * @param mac Das Gerät, dessen Status übermittelt wird.
  * @param status Der zu sendende Status des Geräts.
  */
-void send_status(const String &mac, const String &payload){
-  mqtt_client.publish("status", mac + ":" + payload);
+void send_status(const String &mac, const String &status){
+  mqtt_client.publish("status", mac + ":" + status);
 }
 
 /**
@@ -169,10 +215,10 @@ void send_status(const String &mac, const String &payload){
  * @param parking_lot_nr Die optionale Parkplatznummer.
  * @param parent_mac Das optionale übergeordnete Gerät.
  */
-void send_register(const String &mac, const DeviceTypeName &device_type, const int &parking_lot_number, const String &parent_mac){
-  String parking_lot_number_as_string = parking_lot_number == NULL_INT ? "": String(parking_lot_number);
-  String parent_mac_as_string = parent_mac == NULL_STRING ? "" : parent_mac;
-  String message = mac + ":" + device_type_name_to_string(device_type) + ":" + parking_lot_number_as_string + ":" + parent_mac_as_string;
+void send_register(const String &mac, const LogicalType &type, const int &parking_lot_number, const String &parent_mac){
+  String parking_lot_number_as_string = parking_lot_number == NULL ? "": String(parking_lot_number);
+  String parent_mac_as_string = parent_mac == NULL ? "" : parent_mac;
+  String message = mac + ":" + logical_type_to_string(type) + ":" + parking_lot_number_as_string + ":" + parent_mac_as_string;
   mqtt_client.publish("register", message);
 }
 
@@ -182,17 +228,16 @@ void send_register(const String &mac, const DeviceTypeName &device_type, const i
  * @param payload Die empfangende Nachricht.
  */
 void message_received(String &topic, String &payload) {
-  
   if (topic == "scan") {
+    Serial.println("Received scan-lane");
     reveive_scan();
-    Serial.println("received something on scan-lane");
   }
   else if(topic == "instruction") {
     int payload_finder = payload.indexOf(":");
     String mac = payload.substring(0, payload_finder);
     String instruction = payload.substring(payload_finder+1);
+    Serial.println("Received instruction-lane, mac: \"" + mac + "\" instruction: \"" + instruction + "\"");
     receive_instruction(mac,instruction);
-    Serial.println("received on instruction-lane for mac: " + mac + " the instruction: " + instruction);
   }
 }
 
@@ -202,12 +247,11 @@ void message_received(String &topic, String &payload) {
  */
 boolean is_device_configuration_valid(){
   Serial.print("Check device configurations: ");
-   
   for(int i = 0; i < DEVICES_LENGTH; i++) 
   {
-    const DeviceConfiguration &lhs = DEVICES[i];
+    const Device &lhs = DEVICES[i];
     for(int y = 0; y < DEVICES_LENGTH; y++){
-      const DeviceConfiguration &rhs = DEVICES[y];
+      const Device &rhs = DEVICES[y];
       if(y == i) 
         continue;
       // Prüfe ob Mac unique
@@ -231,16 +275,47 @@ boolean is_device_configuration_valid(){
  * Sollte die Gerätekonfiguration ungültig sein, wird das Programm beendet.
  */
 void setup_devices(){
-  //if(!is_device_configuration_valid()) 
-  //  exit(1);
-  // Registriere Geräte
+  if(!is_device_configuration_valid()) 
+    exit(1);
+  
+  // Konfiguriere Geräte 
   for(int i = 0; i < DEVICES_LENGTH; i++){
-    pinMode(DEVICES[i].pin, DEVICES[i].is_input ?  INPUT : OUTPUT);
-    if(DEVICES[i].physical_type == PHYSICAL_SERVO) {
-      control_servo(DEVICES[i],"false");
+    Device &device = DEVICES[i];
+
+    // Servo
+    if(device.physical_type == SERVO){
+      pinMode(device.pin,INPUT);
+      device.servo = new Servo();
+      device.servo->attach(device.pin);
+      // Standartzustand
+      servo_instruction(DEVICES[i],"false");
+    }
+    // Adafruit Neopixel
+    else if(device.physical_type == ADAFRUIT_NEOPIXEL){
+      // Die einzelnen Lampen teilen sich einen Controller, prüfe ob ein solcher bereits vorher erstellt wurde.
+      Adafruit_NeoPixel* neopixel = NULL;
+      for(int y = 0; y < i; y++) {
+        const Device &compare = DEVICES[y];
+        if(compare.physical_type == ADAFRUIT_NEOPIXEL && compare.pin == device.pin){
+          neopixel = compare.neopixel;
+          break;
+        } 
+      }
+      // Erstelle neuen Controller und konfiguriere Pins, sollte der Controller noch nicht existieren
+      if(neopixel == NULL) {
+        pinMode(device.pin,INPUT);
+        neopixel = new Adafruit_NeoPixel(*device.neopixel_pixel_count,device.pin);
+        neopixel->begin();
+        neopixel->setBrightness(100);
+      }
+
+      device.neopixel = neopixel;
+    
+      // Standartzustand
+      neopixel_instruction(device,"false");
+      
     }
   }
-    
 }
 
 /**
@@ -302,6 +377,7 @@ void setup() {
 }
 
 void loop() {
+  
   if (!mqtt_client.connected()) 
     connect_mqtt();
   mqtt_client.loop();
