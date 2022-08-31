@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <Servo.h>
 #include <Adafruit_NeoPixel.h>
+#include <Wire.h>
 
 /**
  * Die verfügbaren logischen Gerätetypen.
@@ -17,7 +18,7 @@ enum LogicalType {
  * Die tatsächlich verwendeten Geräte.
  */
 enum PhyisicalType {
-  SERVO, ADAFRUIT_NEOPIXEL
+  SERVO, ADAFRUIT_NEOPIXEL, MH_SERIES_WIRE_SENSOR
 };
 
 
@@ -81,15 +82,16 @@ struct Device {
 /**
  * Die Anzahl an virtuellen Geräten.
  */
-const int DEVICES_LENGTH = 3;
+const int DEVICES_LENGTH = 1;
 
 /**
  * Die Virtuellen Geräte.
  */
 Device DEVICES[DEVICES_LENGTH] = {
-  {"PG1",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(1),NULL,NULL,NULL,NULL,NULL,new int(20)},
-  {"PG2",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(2),NULL,new String("PG1"),NULL,NULL,NULL,new int(20)},
-  {"PG3",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(3),NULL,new String("PG2"),NULL,NULL,NULL,new int(20)}
+  //{"WS1", MOTION_SENSOR, MH_SERIES_WIRE_SENSOR, 6, NULL, NULL,NULL,NULL,NULL,NULL, NULL}
+  //{"PG1",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(1),NULL,NULL,NULL,NULL,NULL,new int(20)},
+  //{"PG2",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(2),NULL,new String("PG1"),NULL,NULL,NULL,new int(20)},
+  //{"PG3",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(3),NULL,new String("PG2"),NULL,NULL,NULL,new int(20)}
   //{"S1",ENTER_BARRIER,SERVO,46,NULL,NULL,NULL,NULL,NULL,NULL}
 };
 
@@ -120,7 +122,7 @@ String logical_type_to_string (const LogicalType& type) {
 /**
  * Es wurde eine "scan"-Anweisung per MQTT erhalten.
  */
-void reveive_scan(){
+void process_scan(){
   // Verschicke zuerst nur jene ohne parent
   for(int i = 0; i < DEVICES_LENGTH; i++)
     if(DEVICES[i].parent_mac == NULL)
@@ -138,7 +140,7 @@ void reveive_scan(){
  * @param mac Das Gerät, welches geschalten werden soll.
  * @param instruction Der neue anzunehmende Zustand.
  */
-void receive_instruction(const String &mac, const String &instruction){
+void process_instruction(const String &mac, const String &instruction){
   // Prüfe ob Gerät auf diesem Board
    for(int i = 0; i < DEVICES_LENGTH; i++) {
     Device &device = DEVICES[i];
@@ -146,14 +148,11 @@ void receive_instruction(const String &mac, const String &instruction){
       continue;
     // Abhängig von Gerätetyp schalten
     if(device.logical_type == ENTER_BARRIER || device.logical_type == EXIT_BARRIER  ){
-      servo_instruction(device,instruction);  
+      instruct_servo(device,instruction);  
     }
     else if(device.physical_type == ADAFRUIT_NEOPIXEL){
-      neopixel_instruction(device,instruction);
+      instruct_adafruit_neopixel(device,instruction);
     }
-
-    delete device.latest_status;
-    device.latest_status = new String(instruction);
     break;  
   }
 };
@@ -163,14 +162,18 @@ void receive_instruction(const String &mac, const String &instruction){
  * @param device Das zu schaltende Gerät.
  * @þaram instruction Der anzunehmende Zustand.
  */
-void servo_instruction(const Device &device, const String &instruction){
+void instruct_servo(Device &device, const String &instruction){
   if(instruction == "true") {
     device.servo->writeMicroseconds(1900); 
     send_status(device.mac,"true");
+    delete device.latest_status;
+    device.latest_status = new String("true");
    }
    else if(instruction == "false") {
     device.servo->writeMicroseconds(1000);
     send_status(device.mac,"false");
+    delete device.latest_status;
+    device.latest_status = new String("false");
    }
    else {
     Serial.println("Error: Invalid instruction for device, type: \"SERVO\", instruction: \"" + instruction +  "\"");
@@ -182,22 +185,41 @@ void servo_instruction(const Device &device, const String &instruction){
  * @param device Das zu schaltende Gerät.
  * @þaram instruction Der anzunehmende Zustand.
  */
-void neopixel_instruction(const Device &device, const String &instruction){
+void instruct_adafruit_neopixel(Device &device, const String &instruction){
   if(instruction == "true") {
     device.neopixel->setPixelColor(*device.identifier,device.neopixel->Color(100,100,100));
     device.neopixel->show();
     send_status(device.mac,"true");
+    delete device.latest_status;
+    device.latest_status = new String("true");
    }
    else if(instruction == "false") {
     device.neopixel->setPixelColor(*device.identifier,device.neopixel->Color(0,0,0));
     device.neopixel->show();
     send_status(device.mac,"false");
+    delete device.latest_status;
+    device.latest_status = new String("false");
    }
    else {
     Serial.println("Error: Invalid instruction for device, type: \"ADAFRUIT_NEOPIXEL\", instruction: \"" + instruction +  "\"");
    }
 }
 
+/**
+ * Synchronisiert einen virtuellen Bewegungsgerät. Hat das Gerät einen neuen Zustand angenommen, wird dieser per MQTT übermittelt.
+ * @param device Das zu synchronisierende Gerät.
+ */
+void synchronize_mh_series_wire_sensor(Device& device){
+  const boolean value = digitalRead(device.pin) == LOW;
+  // Prüfe ob Sensor neuen Wert angenommen hat.
+  //if(device.latest_status != NULL) Serial.println(*device.latest_status);
+  //Serial.println(value);
+  if(device.latest_status == NULL || (*device.latest_status == "true" && value == false) || (*device.latest_status == "false" && value)) {
+    delete device.latest_status; 
+    device.latest_status = new String(value ? "true" : "false");
+    send_status(device.mac, *device.latest_status);
+  }
+}
 
 /**
  * Sendet den Status eines Geräts per MQTT.
@@ -205,6 +227,7 @@ void neopixel_instruction(const Device &device, const String &instruction){
  * @param status Der zu sendende Status des Geräts.
  */
 void send_status(const String &mac, const String &status){
+  Serial.println("Send status, mac: \"" + mac + "\", status: \"" + status + "\"");
   mqtt_client.publish("status", mac + ":" + status);
 }
 
@@ -230,14 +253,14 @@ void send_register(const String &mac, const LogicalType &type, const int &parkin
 void message_received(String &topic, String &payload) {
   if (topic == "scan") {
     Serial.println("Received scan-lane");
-    reveive_scan();
+    process_scan();
   }
   else if(topic == "instruction") {
     int payload_finder = payload.indexOf(":");
     String mac = payload.substring(0, payload_finder);
     String instruction = payload.substring(payload_finder+1);
     Serial.println("Received instruction-lane, mac: \"" + mac + "\" instruction: \"" + instruction + "\"");
-    receive_instruction(mac,instruction);
+    process_instruction(mac,instruction);
   }
 }
 
@@ -288,7 +311,7 @@ void setup_devices(){
       device.servo = new Servo();
       device.servo->attach(device.pin);
       // Standartzustand
-      servo_instruction(DEVICES[i],"false");
+      instruct_servo(DEVICES[i],"false");
     }
     // Adafruit Neopixel
     else if(device.physical_type == ADAFRUIT_NEOPIXEL){
@@ -308,12 +331,12 @@ void setup_devices(){
         neopixel->begin();
         neopixel->setBrightness(100);
       }
-
       device.neopixel = neopixel;
-    
       // Standartzustand
-      neopixel_instruction(device,"false");
-      
+      instruct_adafruit_neopixel(device,"false"); 
+    }
+    else if(device.physical_type == MH_SERIES_WIRE_SENSOR){
+      // Keine Konfig notwendig
     }
   }
 }
@@ -371,6 +394,7 @@ void setup() {
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }
+
   setup_devices();
   setup_wifi();
   setup_mqtt();
@@ -381,6 +405,10 @@ void loop() {
   if (!mqtt_client.connected()) 
     connect_mqtt();
   mqtt_client.loop();
+
+  for(int i = 0; i < DEVICES_LENGTH; i++) 
+      if(DEVICES[i].physical_type == MH_SERIES_WIRE_SENSOR)
+        synchronize_mh_series_wire_sensor(DEVICES[i]);
 
   // TODO: Geräte updates senden
   // Kleiner Test
