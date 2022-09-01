@@ -7,19 +7,21 @@
 #include <Adafruit_NeoPixel.h>
 #include <Wire.h>
 #include "Adafruit_SGP30.h"
+#include "Adafruit_LEDBackpack.h"
+#include "Adafruit_LEDBackpack.h"
 
 /**
  * Die verfügbaren logischen Gerätetypen.
  */
 enum LogicalType {
-  ENTER_BARRIER, EXIT_BARRIER, LAMP, PARKING_GUIDE_LAMP, CWO_SENSOR, MOTION_SENSOR
+  ENTER_BARRIER, EXIT_BARRIER, LAMP, PARKING_GUIDE_LAMP, CWO_SENSOR, MOTION_SENSOR, SPACE_DISPLAY
 };
 
 /**
  * Die tatsächlich verwendeten Geräte.
  */
 enum PhyisicalType {
-  SERVO, ADAFRUIT_NEOPIXEL, MH_SERIES_WIRE_SENSOR, ADAFRUIT_SGP30
+  SERVO, ADAFRUIT_NEOPIXEL, MH_SERIES_WIRE_SENSOR, ADAFRUIT_SGP30, ADAFRUIT_7_SEGMENT_DISPLAY
 };
 
 
@@ -78,18 +80,35 @@ struct Device {
    * Die Anzahl an Pixeln auf dem Neopixelband.
    */
   int* neopixel_pixel_count;
+
+  /**
+   * Die Adresse eines 7-Segment Displays.
+   */
+  int* address;
+
+  /**
+   * Die Display-Steuerung, sollte es sich bei dem Gerät um ein 7-Segment-Display handeln.
+   */
+  Adafruit_7segment* display;
 };
 
 /**
  * Die Anzahl an virtuellen Geräten.
  */
-const int DEVICES_LENGTH = 1;
+const int DEVICES_LENGTH = 4;
 
 /**
  * Die Virtuellen Geräte.
  */
 Device DEVICES[DEVICES_LENGTH] = {
-  {"CWO", CWO_SENSOR, ADAFRUIT_SGP30,-1,NULL, NULL,NULL,NULL,NULL,NULL, NULL}
+  /**
+   * Die Addresse von 0x70 ist der Standart für das Adafruit 7-Segment-Display.
+   */
+  {"S1", SPACE_DISPLAY, ADAFRUIT_7_SEGMENT_DISPLAY, -1, new int(0), NULL, NULL, NULL, NULL, NULL, NULL, new int(0x70), NULL},
+  {"S2", SPACE_DISPLAY, ADAFRUIT_7_SEGMENT_DISPLAY, -1, new int(1), NULL, NULL, NULL, NULL, NULL, NULL, new int(0x70), NULL},
+  {"S3", SPACE_DISPLAY, ADAFRUIT_7_SEGMENT_DISPLAY, -1, new int(3), NULL, NULL, NULL, NULL, NULL, NULL, new int(0x70), NULL},
+  {"S4", SPACE_DISPLAY, ADAFRUIT_7_SEGMENT_DISPLAY, -1, new int(4), NULL, NULL, NULL, NULL, NULL, NULL, new int(0x70), NULL}
+  //{"CWO", CWO_SENSOR, ADAFRUIT_SGP30,-1,NULL, NULL,NULL,NULL,NULL,NULL, NULL}
   //{"WS1", MOTION_SENSOR, MH_SERIES_WIRE_SENSOR, 6, NULL, NULL,NULL,NULL,NULL,NULL, NULL}
   //{"PG1",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(1),NULL,NULL,NULL,NULL,NULL,new int(20)},
   //{"PG2",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(2),NULL,new String("PG1"),NULL,NULL,NULL,new int(20)},
@@ -148,12 +167,12 @@ void process_instruction(const String &mac, const String &instruction){
     if(device.mac != mac) 
       continue;
     // Abhängig von Gerätetyp schalten
-    if(device.logical_type == ENTER_BARRIER || device.logical_type == EXIT_BARRIER  ){
+    if(device.logical_type == ENTER_BARRIER || device.logical_type == EXIT_BARRIER)
       instruct_servo(device,instruction);  
-    }
-    else if(device.physical_type == ADAFRUIT_NEOPIXEL){
+    else if(device.physical_type == ADAFRUIT_NEOPIXEL)
       instruct_adafruit_neopixel(device,instruction);
-    }
+    else if(device.physical_type == ADAFRUIT_7_SEGMENT_DISPLAY)
+      instruct_adafruit_7_segment_display(device,instruction);
     break;  
   }
 };
@@ -212,6 +231,37 @@ void instruct_adafruit_neopixel(Device &device, const String &instruction){
    else {
     Serial.println("Error: Invalid instruction for device, type: \"ADAFRUIT_NEOPIXEL\", instruction: \"" + instruction +  "\"");
    }
+}
+
+/**
+ * Gibt Anweisung an ein 7-Segment Display.
+ * @param device Das zu schaltende Gerät.
+ * @þaram instruction Der anzunehmende Zustand.
+ */
+void instruct_adafruit_7_segment_display(Device &device, const String &instruction){
+  if(instruction != NULL && instruction.length() == 1 && isDigit(instruction[0])){
+    const int instruction_as_int = instruction.toInt();
+
+    // Schreibe die Ziffer dieses Segments
+    device.display->writeDigitNum(*device.identifier,instruction_as_int);
+
+    // Achtung: WriteDisplay löscht den Buffer für jedes nicht gesetzte Segment. Daher müssen zuvor alle Segmente neu geschrieben werden
+    // Iteriere über alle Geräte, welche ein Segment darstellen, nicht dem Gerät dieses Aufrufs entsprechen (mac), auf dem Selben Display sind (address) und einen status haben.
+    // Für diese Geräte muss der letzte Status erneut auf dem Display dargestellt werden.
+    for(int i = 0; i < DEVICES_LENGTH; i++)
+      if(DEVICES[i].physical_type == ADAFRUIT_7_SEGMENT_DISPLAY && DEVICES[i].mac != device.mac && *DEVICES[i].address == *device.address && DEVICES[i].latest_status != NULL)
+        device.display->writeDigitNum(*DEVICES[i].identifier,DEVICES[i].latest_status->toInt());
+
+    device.display->writeDisplay();
+    if(device.latest_status == NULL) 
+      device.latest_status = new String(instruction_as_int);
+    else 
+      *device.latest_status = String(instruction_as_int);
+    send_status(device.mac,*device.latest_status);
+  }
+  else {
+    Serial.println("Error: Invalid instruction for device, type: \"ADAFRUIT_7_SEGMENT_DISPLAY\", instruction: \"" + instruction +  "\"");
+  }
 }
 
 /**
@@ -315,7 +365,9 @@ boolean is_device_configuration_valid(){
         return false;
       }
     }
-    // TODO: Pin Prüfung abhängig von Gerätetyp.
+    // TODO: Servo: Pinprüfung
+    // TODO: Neopixel: Identifier, NeopixelCount notwendig
+    // TODO: 7-Segment-Display: Address notwendig
   }
   Serial.println("done");
   return true;
@@ -334,7 +386,6 @@ void setup_devices(){
   // Konfiguriere Geräte 
   for(int i = 0; i < DEVICES_LENGTH; i++){
     Device &device = DEVICES[i];
-
     // Servo
     if(device.physical_type == SERVO){
       pinMode(device.pin,INPUT);
@@ -367,6 +418,23 @@ void setup_devices(){
     }
     else if(device.physical_type == MH_SERIES_WIRE_SENSOR){
       // Keine Konfig notwendig
+    }
+    else if(device.physical_type == ADAFRUIT_7_SEGMENT_DISPLAY) {
+      // Die einzelnen Segmente teilen sich einen Controller, prüfe ob ein solcher bereits vorher erstellt wurde.
+      Adafruit_7segment* display = NULL;
+      for(int y = 0; y < i; y++) 
+        if(DEVICES[y].physical_type == ADAFRUIT_7_SEGMENT_DISPLAY && DEVICES[y].address == device.address){
+          display = DEVICES[y].display;
+          break;
+        } 
+      // Erstelle neuen Controller, sollte der Controller noch nicht existieren
+      if(display == NULL){
+        display = new Adafruit_7segment();
+        display->begin(*device.address);
+      }
+      device.display = display;
+      // Standartzustand
+      device.display->clear();
     }
   }
 }
@@ -469,7 +537,7 @@ void setup() {
   setup_devices();
   setup_wifi();
   setup_mqtt();
-  setup_cwo_sensor();
+  //setup_cwo_sensor();
 }
 
 void loop() {
