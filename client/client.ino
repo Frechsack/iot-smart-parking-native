@@ -136,23 +136,15 @@ String logical_type_to_string (const LogicalType& type) {
     return "PARKING_GUIDE_LAMP";
   if (type == CWO_SENSOR)
     return "CWO_SENSOR";
-  return "MOTION_SENSOR"; 
-};
-
-/**
- * Es wurde eine "scan"-Anweisung per MQTT erhalten.
- */
-void process_scan(){
-  // Verschicke zuerst nur jene ohne parent
-  for(int i = 0; i < DEVICES_LENGTH; i++)
-    if(DEVICES[i].parent_mac == NULL)
-      send_register(DEVICES[i].mac,DEVICES[i].logical_type,DEVICES[i].parking_lot_nr, DEVICES[i].parent_mac); 
+  if(type == MOTION_SENSOR)
+    return "MOTION_SENSOR";
+  if(type == SPACE_DISPLAY)
+    return "SPACE_DISPLAY";
+  Serial.print("LogicalType forgot to be implemented, type: \"");
+  Serial.print(type);
+  Serial.println("\"");
   delay(2000);
-  // Dann jene mit parent
-  for(int i = 0; i < DEVICES_LENGTH; i++)
-    if(DEVICES[i].parent_mac != NULL)
-      send_register(DEVICES[i].mac,DEVICES[i].logical_type,DEVICES[i].parking_lot_nr, DEVICES[i].parent_mac);   
-  
+  exit(0);
 };
 
 /**
@@ -309,7 +301,7 @@ void synchronize_mh_series_wire_sensor(Device& device){
  * @param status Der zu sendende Status des Geräts.
  */
 void send_status(const String &mac, const String &status){
-  Serial.println("Send status, mac: \"" + mac + "\", status: \"" + status + "\"");
+  Serial.println("Send status, message: \""+ mac + ":" + status + "\"");
   mqtt_client.publish("status", mac + ":" + status);
 }
 
@@ -320,12 +312,30 @@ void send_status(const String &mac, const String &status){
  * @param parking_lot_nr Die optionale Parkplatznummer.
  * @param parent_mac Das optionale übergeordnete Gerät.
  */
-void send_register(const String &mac, const LogicalType &type, const int &parking_lot_number, const String &parent_mac){
-  String parking_lot_number_as_string = parking_lot_number == NULL ? "": String(parking_lot_number);
-  String parent_mac_as_string = parent_mac == NULL ? "" : parent_mac;
+void send_register(const String &mac, const LogicalType &type, const int* parking_lot_number, const String* parent_mac){
+  String parking_lot_number_as_string = parking_lot_number == NULL ? "": String(*parking_lot_number);
+  String parent_mac_as_string = parent_mac == NULL ? "" : *parent_mac;
   String message = mac + ":" + logical_type_to_string(type) + ":" + parking_lot_number_as_string + ":" + parent_mac_as_string;
+  Serial.println("Send register, message: \"" + message + "\"");
   mqtt_client.publish("register", message);
 }
+
+/**
+ * Es wurde eine "scan"-Anweisung per MQTT erhalten.
+ */
+void process_scan(){
+  // Verschicke zuerst nur jene ohne parent
+  for(int i = 0; i < DEVICES_LENGTH; i++)
+    if(DEVICES[i].parent_mac == NULL){
+      send_register(DEVICES[i].mac,DEVICES[i].logical_type,DEVICES[i].parking_lot_nr, DEVICES[i].parent_mac); 
+    }
+  delay(2000);
+  // Dann jene mit parent
+  for(int i = 0; i < DEVICES_LENGTH; i++)
+    if(DEVICES[i].parent_mac != NULL)
+      send_register(DEVICES[i].mac,DEVICES[i].logical_type,DEVICES[i].parking_lot_nr, DEVICES[i].parent_mac);   
+  
+};
 
 /**
  * Eine Nachricht wurde per MQTT empfangen.
