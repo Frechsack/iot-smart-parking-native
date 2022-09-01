@@ -1,0 +1,13 @@
+# Co2Sensor (SGP30):
+- VIN: 5V+
+- 1V8: Ohne Verwendung
+- GND: -
+- SCL: Pin 21
+- SDA: 20
+
+# Adafruit Neopixel
+**Anschluss an Male**
+- Rot: 5V+
+- Mitte: Daten (Pin-Auswahl)
+- Aussen: -
+

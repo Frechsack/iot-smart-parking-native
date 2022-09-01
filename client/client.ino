@@ -6,6 +6,7 @@
 #include <Servo.h>
 #include <Adafruit_NeoPixel.h>
 #include <Wire.h>
+#include "Adafruit_SGP30.h"
 
 /**
  * Die verfügbaren logischen Gerätetypen.
@@ -18,7 +19,7 @@ enum LogicalType {
  * Die tatsächlich verwendeten Geräte.
  */
 enum PhyisicalType {
-  SERVO, ADAFRUIT_NEOPIXEL, MH_SERIES_WIRE_SENSOR
+  SERVO, ADAFRUIT_NEOPIXEL, MH_SERIES_WIRE_SENSOR, ADAFRUIT_SGP30
 };
 
 
@@ -88,6 +89,7 @@ const int DEVICES_LENGTH = 1;
  * Die Virtuellen Geräte.
  */
 Device DEVICES[DEVICES_LENGTH] = {
+  {"CWO", CWO_SENSOR, ADAFRUIT_SGP30,-1,NULL, NULL,NULL,NULL,NULL,NULL, NULL}
   //{"WS1", MOTION_SENSOR, MH_SERIES_WIRE_SENSOR, 6, NULL, NULL,NULL,NULL,NULL,NULL, NULL}
   //{"PG1",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(1),NULL,NULL,NULL,NULL,NULL,new int(20)},
   //{"PG2",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(2),NULL,new String("PG1"),NULL,NULL,NULL,new int(20)},
@@ -95,10 +97,9 @@ Device DEVICES[DEVICES_LENGTH] = {
   //{"S1",ENTER_BARRIER,SERVO,46,NULL,NULL,NULL,NULL,NULL,NULL}
 };
 
-
-int wifi_status = WL_IDLE_STATUS;
 WiFiClient wifi_client;
 MQTTClient mqtt_client;
+const Adafruit_SGP30 cwo_sensor;
 
 /**
  * Konvertiert ein enum des Typs "DeviceTypeName" in einen String.
@@ -166,14 +167,18 @@ void instruct_servo(Device &device, const String &instruction){
   if(instruction == "true") {
     device.servo->writeMicroseconds(1900); 
     send_status(device.mac,"true");
-    delete device.latest_status;
-    device.latest_status = new String("true");
+    if(device.latest_status == NULL)
+      device.latest_status = new String("true");
+    else
+      *device.latest_status = "true";
    }
    else if(instruction == "false") {
     device.servo->writeMicroseconds(1000);
     send_status(device.mac,"false");
-    delete device.latest_status;
-    device.latest_status = new String("false");
+     if(device.latest_status == NULL)
+      device.latest_status = new String("false");
+    else
+      *device.latest_status = "false";
    }
    else {
     Serial.println("Error: Invalid instruction for device, type: \"SERVO\", instruction: \"" + instruction +  "\"");
@@ -190,15 +195,19 @@ void instruct_adafruit_neopixel(Device &device, const String &instruction){
     device.neopixel->setPixelColor(*device.identifier,device.neopixel->Color(100,100,100));
     device.neopixel->show();
     send_status(device.mac,"true");
-    delete device.latest_status;
-    device.latest_status = new String("true");
+    if(device.latest_status == NULL)
+      device.latest_status = new String("true");
+    else
+      *device.latest_status = "true";
    }
    else if(instruction == "false") {
     device.neopixel->setPixelColor(*device.identifier,device.neopixel->Color(0,0,0));
     device.neopixel->show();
     send_status(device.mac,"false");
-    delete device.latest_status;
-    device.latest_status = new String("false");
+    if(device.latest_status == NULL)
+      device.latest_status = new String("false");
+    else
+      *device.latest_status = "false";
    }
    else {
     Serial.println("Error: Invalid instruction for device, type: \"ADAFRUIT_NEOPIXEL\", instruction: \"" + instruction +  "\"");
@@ -206,7 +215,30 @@ void instruct_adafruit_neopixel(Device &device, const String &instruction){
 }
 
 /**
- * Synchronisiert einen virtuellen Bewegungsgerät. Hat das Gerät einen neuen Zustand angenommen, wird dieser per MQTT übermittelt.
+ * Synchronisiert ein virtuelles Gerät. Hat das Gerät einen neuen Zustand angenommen, wird dieser per MQTT übermittelt.
+ * @param device Das zu synchronisierende Gerät.
+ */
+void synchronize_adafruit_sgp30(Device &device){
+  // Prüfe ob Messung erfolgreich
+  if(!cwo_sensor.IAQmeasure()){
+    return;
+  }
+  int co2 = cwo_sensor.eCO2;
+  if(device.latest_status == NULL) {
+    device.latest_status = new String(co2);
+    send_status(device.mac,*device.latest_status);
+    return; 
+  }
+
+  String co2_as_string = String(co2);
+  if(*device.latest_status != co2_as_string) {
+    *device.latest_status = co2_as_string;
+    send_status(device.mac,co2_as_string);
+  }
+}
+
+/**
+ * Synchronisiert ein virtuelles Gerät. Hat das Gerät einen neuen Zustand angenommen, wird dieser per MQTT übermittelt.
  * @param device Das zu synchronisierende Gerät.
  */
 void synchronize_mh_series_wire_sensor(Device& device){
@@ -283,11 +315,7 @@ boolean is_device_configuration_valid(){
         return false;
       }
     }
-    // Prüfe ob pin gültig
-    if(lhs.pin <= 0){
-       Serial.println("Invalid, device with mac: " + lhs.mac +  " has invalid pin.");
-       return false;
-    }
+    // TODO: Pin Prüfung abhängig von Gerätetyp.
   }
   Serial.println("done");
   return true;
@@ -298,8 +326,10 @@ boolean is_device_configuration_valid(){
  * Sollte die Gerätekonfiguration ungültig sein, wird das Programm beendet.
  */
 void setup_devices(){
-  if(!is_device_configuration_valid()) 
+  if(!is_device_configuration_valid()){
+    delay(2000);
     exit(1);
+  }
   
   // Konfiguriere Geräte 
   for(int i = 0; i < DEVICES_LENGTH; i++){
@@ -342,19 +372,31 @@ void setup_devices(){
 }
 
 /**
- * Konfiguriert das WiFi-Modul und stellt eine Verbindung zum WLAN her.
+ * Konfiguriert das WiFi-Modul und stellt eine Verbindung zum WLAN her. 
+ * Konnte das WiFi-Module nicht konfiguriert werden, bricht das Programm ab.
+ * Blockt solange, bis eine WLAN Verbindung aufgebaut ist.
  */
 void setup_wifi(){
+  Serial.print("Setup Wifi-Module: ");
   // Registriere WiFi-Modul
   WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
-  while (WiFi.status() == WL_NO_MODULE) {
-    Serial.println("WiFi-Connection failed.");
+  // Verzögerung zum starten des Moduls
+  for(int i = 0; i < 10 && WiFi.status() == WL_NO_MODULE; i++)
     delay(1000);
+  if(WiFi.status() == WL_NO_MODULE){
+    Serial.println("failed");
+    delay(2000);
+    exit(1);
   }
-
+  else
+    Serial.println("done");
+    
   Serial.print("Connect to WiFI: ");
   Serial.print(WIFI_SSID);
   Serial.print(": ");
+
+  // WiFi Verbinden
+  int wifi_status = WL_IDLE_STATUS;
   do {
     wifi_status = WiFi.begin(WIFI_SSID, WIFI_PASS);
     delay(100);
@@ -363,12 +405,41 @@ void setup_wifi(){
 }
 
 /**
- * Initialisiert den MQTT-Client.
+ * Konfiguriert den MQTT-Client.
  */
 void setup_mqtt(){
+  Serial.print("Setup Mqtt-Client: ");
   mqtt_client.begin(MQTT_BROKER, wifi_client);
   mqtt_client.onMessage(message_received);
-  connect_mqtt();
+  Serial.println("done");
+  //connect_mqtt();
+}
+
+/**
+ * Konfiguriert den Co2-Sensor.
+ * Konnte der Sensor nicht konfiguriert werden, bricht das Programm ab.
+ * Blockiert solange, bis der Sensor konfiguriert wurde.
+ */
+void setup_cwo_sensor(){
+  Serial.print("Setup Cwo-Sensor: ");
+  int count = 0;
+  boolean is_valid = false;
+  do
+     if(cwo_sensor.begin()){
+      is_valid = true;
+      break;
+     }
+     else
+      delay(200);
+  while(count++ <= 10);
+  
+  if(is_valid)
+    Serial.println("done");
+  else {
+    Serial.println("failed");
+    delay(2000);
+    exit(0);
+  }
 }
 
 /**
@@ -398,6 +469,7 @@ void setup() {
   setup_devices();
   setup_wifi();
   setup_mqtt();
+  setup_cwo_sensor();
 }
 
 void loop() {
@@ -407,9 +479,11 @@ void loop() {
   mqtt_client.loop();
 
   for(int i = 0; i < DEVICES_LENGTH; i++) 
+      // Linien-Sensoren
       if(DEVICES[i].physical_type == MH_SERIES_WIRE_SENSOR)
         synchronize_mh_series_wire_sensor(DEVICES[i]);
-
+      else if(DEVICES[i].physical_type == ADAFRUIT_SGP30)
+        synchronize_adafruit_sgp30(DEVICES[i]);
   // TODO: Geräte updates senden
   // Kleiner Test
   /*

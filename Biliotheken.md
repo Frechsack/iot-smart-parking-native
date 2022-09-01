@@ -1,5 +1,7 @@
-- MQTT
-- Adafruit NeoPixel
-- WiFiNINA
-- Servo
-- AceWire
+- MQTT: 2.5.0
+- Adafruit NeoPixel: 1.10.5
+- WiFiNINA: 1.6.0
+- Servo: 1.1.8
+- AceWire: 0.4.1
+- Adafruit BusIO: 1.13.2
+- Adafruit SGP30 Sensor: 2.0.0
