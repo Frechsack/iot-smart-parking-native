@@ -5,3 +5,12 @@
 - AceWire: 0.4.1
 - Adafruit BusIO: 1.13.2
 - Adafruit SGP30 Sensor: 2.0.0
+- Adafruit Backpack Library: 1.3.2
+  - Adafruit GFX Library
+  - WaveHC
+  - Adafruit ILI9341
+  - Adafruit STMPE610
+  - Adafruit TouchScreen
+  - RTClib
+  - Adafruit GPS Library
+  - SD
