@@ -11,20 +11,22 @@
 #include "Adafruit_LEDBackpack.h"
 
 /**
- * Die verfügbaren logischen Gerätetypen.
+ * Die logischen Gerätetypen.
  */
 enum LogicalType {
   ENTER_BARRIER, EXIT_BARRIER, LAMP, PARKING_GUIDE_LAMP, CWO_SENSOR, MOTION_SENSOR, SPACE_DISPLAY
 };
 
 /**
- * Die tatsächlich verwendeten Geräte.
+ * Die physischen Gerätetypen.
  */
 enum PhyisicalType {
   SERVO, ADAFRUIT_NEOPIXEL, MH_SERIES_WIRE_SENSOR, ADAFRUIT_SGP30, ADAFRUIT_7_SEGMENT_DISPLAY
 };
 
-
+/**
+ * Stellt ein virtuelles Gerät da.
+ */
 struct Device {
   
   /**
@@ -43,12 +45,13 @@ struct Device {
   PhyisicalType physical_type;
 
   /**
-   * Der verwendete Pin des Geräts.
+   * Der verwendete Pin des Geräts. Sollte ein Gerät ohne Pinsteuerung auskommen, kann -1 verwendet werden.
    */
   int pin;
 
   /**
-   * Der optionale Identifier des Geräts.
+   * Der optionale Identifier des Geräts. Dient um ein virtuelles Gerät auf einem Physichen Gerät zu identifizieren. 
+   * Verwendet z.B. bei 7-Segment Display oder Neopixel-Band um die Position bzw. Segment zu bestimmen. 
    */
   int* identifier;
   
@@ -56,6 +59,7 @@ struct Device {
    * Die optionale Parkplatzzuordnung.
    */
   int* parking_lot_nr;
+  
   /**
    * Das optionale Elternelement.
    */
@@ -67,12 +71,12 @@ struct Device {
   String* latest_status;
   
   /**
-   * Die Neopixel steuerung, sollte das Gerät auf einem Neopixelband sitzen.
+   * Die Neopixel steuerung, sollte das Gerät auf einem Neopixelband sitzen. Wird bei Programmstart automatisch initialisiert.
    */
   Adafruit_NeoPixel* neopixel;
   
   /**
-   * Sie Servo-Setuerung, sollte das Gerät ein Servomotor sein.
+   * Sie Servo-Setuerung, sollte das Gerät ein Servomotor sein. Wird bei Programmstart automatisch initialisiert.
    */
   Servo* servo;
 
@@ -82,12 +86,12 @@ struct Device {
   int* neopixel_pixel_count;
 
   /**
-   * Die Adresse eines 7-Segment Displays.
+   * Die Adresse eines 7-Segment Displays. Der Standart ist 0x70 für das Adafruit 7-Segment-Display.
    */
   int* address;
 
   /**
-   * Die Display-Steuerung, sollte es sich bei dem Gerät um ein 7-Segment-Display handeln.
+   * Die Display-Steuerung, sollte es sich bei dem Gerät um ein 7-Segment-Display handeln. Wird bei Programmstart automatisch initialisiert.
    */
   Adafruit_7segment* display;
 };
@@ -101,9 +105,6 @@ const int DEVICES_LENGTH = 4;
  * Die Virtuellen Geräte.
  */
 Device DEVICES[DEVICES_LENGTH] = {
-  /**
-   * Die Addresse von 0x70 ist der Standart für das Adafruit 7-Segment-Display.
-   */
   {"S1", SPACE_DISPLAY, ADAFRUIT_7_SEGMENT_DISPLAY, -1, new int(0), NULL, NULL, NULL, NULL, NULL, NULL, new int(0x70), NULL},
   {"S2", SPACE_DISPLAY, ADAFRUIT_7_SEGMENT_DISPLAY, -1, new int(1), NULL, NULL, NULL, NULL, NULL, NULL, new int(0x70), NULL},
   {"S3", SPACE_DISPLAY, ADAFRUIT_7_SEGMENT_DISPLAY, -1, new int(3), NULL, NULL, NULL, NULL, NULL, NULL, new int(0x70), NULL},
@@ -118,6 +119,10 @@ Device DEVICES[DEVICES_LENGTH] = {
 
 WiFiClient wifi_client;
 MQTTClient mqtt_client;
+
+/**
+ * Der Co2-Sensor. Pro Board kann nur ein solcher Sensor angeschlossen werden, daher global deklariert und nicht per Co2-Sensor.
+ */
 const Adafruit_SGP30 cwo_sensor;
 
 /**
@@ -140,7 +145,7 @@ String logical_type_to_string (const LogicalType& type) {
     return "MOTION_SENSOR";
   if(type == SPACE_DISPLAY)
     return "SPACE_DISPLAY";
-  Serial.print("LogicalType forgot to be implemented, type: \"");
+  Serial.print("LogicalType forgot to be implemented, type: \"" );
   Serial.print(type);
   Serial.println("\"");
   delay(2000);
@@ -237,7 +242,7 @@ void instruct_adafruit_7_segment_display(Device &device, const String &instructi
     // Schreibe die Ziffer dieses Segments
     device.display->writeDigitNum(*device.identifier,instruction_as_int);
 
-    // Achtung: WriteDisplay löscht den Buffer für jedes nicht gesetzte Segment. Daher müssen zuvor alle Segmente neu geschrieben werden
+    // Achtung: WriteDisplay löscht den Buffer für jedes nicht gesetzte Segment. Daher müssen zuvor alle Segmente neu geschrieben werden.
     // Iteriere über alle Geräte, welche ein Segment darstellen, nicht dem Gerät dieses Aufrufs entsprechen (mac), auf dem Selben Display sind (address) und einen status haben.
     // Für diese Geräte muss der letzte Status erneut auf dem Display dargestellt werden.
     for(int i = 0; i < DEVICES_LENGTH; i++)
@@ -375,9 +380,27 @@ boolean is_device_configuration_valid(){
         return false;
       }
     }
-    // TODO: Servo: Pinprüfung
-    // TODO: Neopixel: Identifier, NeopixelCount notwendig
-    // TODO: 7-Segment-Display: Address notwendig
+    if(lhs.physical_type == SERVO) {
+      if(lhs.pin <= 0){
+        Serial.println("failed: device: " + lhs.mac + " has invalid pin.");
+        delay(2000);
+        exit(1);
+      }
+    }
+    else if(lhs.physical_type == ADAFRUIT_NEOPIXEL){
+      if(lhs.identifier == NULL || lhs.neopixel_pixel_count == NULL){
+        Serial.println("failed: device: " + lhs.mac + " has no identifier or pixel-count.");
+        delay(2000);
+        exit(1);
+      } 
+    }
+     else if(lhs.physical_type == ADAFRUIT_7_SEGMENT_DISPLAY){
+      if(lhs.address == NULL || lhs.identifier == NULL){
+        Serial.println("failed: device: " + lhs.mac + " has no address or identifier.");
+        delay(2000);
+        exit(1);
+      } 
+    }
   }
   Serial.println("done");
   return true;
