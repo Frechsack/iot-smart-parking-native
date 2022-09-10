@@ -2,7 +2,7 @@
 //#define WIFI_PASS "87258400"
 #define WIFI_SSID "FrechLan"
 #define WIFI_PASS "ctx#3942!"
-#define MQTT_BROKER "192.168.0.164"
+#define MQTT_BROKER "192.168.0.45"
 
 // Configure the pins used for the ESP32 connection
 #if defined(ADAFRUIT_FEATHER_M4_EXPRESS) || \

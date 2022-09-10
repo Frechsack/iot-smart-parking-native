@@ -99,22 +99,31 @@ struct Device {
 /**
  * Die Anzahl an virtuellen Geräten.
  */
-const int DEVICES_LENGTH = 4;
+const int DEVICES_LENGTH = 8;
 
 /**
  * Die Virtuellen Geräte.
  */
 Device DEVICES[DEVICES_LENGTH] = {
-  {"S1", SPACE_DISPLAY, ADAFRUIT_7_SEGMENT_DISPLAY, -1, new int(0), NULL, NULL, NULL, NULL, NULL, NULL, new int(0x70), NULL},
-  {"S2", SPACE_DISPLAY, ADAFRUIT_7_SEGMENT_DISPLAY, -1, new int(1), NULL, NULL, NULL, NULL, NULL, NULL, new int(0x70), NULL},
-  {"S3", SPACE_DISPLAY, ADAFRUIT_7_SEGMENT_DISPLAY, -1, new int(3), NULL, NULL, NULL, NULL, NULL, NULL, new int(0x70), NULL},
-  {"S4", SPACE_DISPLAY, ADAFRUIT_7_SEGMENT_DISPLAY, -1, new int(4), NULL, NULL, NULL, NULL, NULL, NULL, new int(0x70), NULL}
-  //{"CWO", CWO_SENSOR, ADAFRUIT_SGP30,-1,NULL, NULL,NULL,NULL,NULL,NULL, NULL}
-  //{"WS1", MOTION_SENSOR, MH_SERIES_WIRE_SENSOR, 6, NULL, NULL,NULL,NULL,NULL,NULL, NULL}
-  //{"PG1",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(1),NULL,NULL,NULL,NULL,NULL,new int(20)},
-  //{"PG2",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(2),NULL,new String("PG1"),NULL,NULL,NULL,new int(20)},
-  //{"PG3",PARKING_GUIDE_LAMP,ADAFRUIT_NEOPIXEL,6,new int(3),NULL,new String("PG2"),NULL,NULL,NULL,new int(20)}
-  //{"S1",ENTER_BARRIER,SERVO,46,NULL,NULL,NULL,NULL,NULL,NULL}
+  /*MAC       LOGICAL_TYPE        PHYSICAL_TYPE                   PIN   IDENTIFIER    PARKING_LOT_NR  PARENT_MAC              LATEST_STATUS  NEOPIXEL  SERVO  NEOXPIXEL_PIXEL_COUNT  ADDRESS        DISPLAY*/
+  /*{"DSP_1"  , SPACE_DISPLAY       , ADAFRUIT_7_SEGMENT_DISPLAY    , -1  , new int(0)  , NULL          , NULL                  , NULL        , NULL    , NULL  , NULL                , new int(0x70) , NULL},
+  {"CWO"    , CWO_SENSOR          , ADAFRUIT_SGP30                , -1  , NULL        , NULL          , NULL                  , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},
+  {"PGL_1"  , PARKING_GUIDE_LAMP  , ADAFRUIT_NEOPIXEL             , 6   , new int(1)  , NULL          , NULL                  , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
+  {"PGL_2"  , PARKING_GUIDE_LAMP  , ADAFRUIT_NEOPIXEL             , 6   , new int(2)  , NULL          , new String("PGL_1")   , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
+  {"PGL_3"  , PARKING_GUIDE_LAMP  , ADAFRUIT_NEOPIXEL             , 6   , new int(3)  , new int(1)    , new String("PGL_1")   , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
+  {"PGL_4"  , PARKING_GUIDE_LAMP  , ADAFRUIT_NEOPIXEL             , 6   , new int(4)  , new int(2)    , new String("PGL_1")   , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
+  {"PGL_5"  , PARKING_GUIDE_LAMP  , ADAFRUIT_NEOPIXEL             , 6   , new int(5)  , new int(3)    , new String("PGL_1")   , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
+  {"PGL_6"  , PARKING_GUIDE_LAMP  , ADAFRUIT_NEOPIXEL             , 6   , new int(6)  , new int(4)    , new String("PGL_1")   , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
+  {"PGL_7"  , PARKING_GUIDE_LAMP  , ADAFRUIT_NEOPIXEL             , 6   , new int(7)  , new int(5)    , new String("PGL_1")   , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
+  {"PGL_8"  , PARKING_GUIDE_LAMP  , ADAFRUIT_NEOPIXEL             , 6   , new int(8)  , new int(6)    , new String("PGL_1")   , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},*/
+  {"MS_1"   , MOTION_SENSOR       , MH_SERIES_WIRE_SENSOR         , 7   , NULL        , new int(1)    , NULL                  , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},
+  {"MS_2"   , MOTION_SENSOR       , MH_SERIES_WIRE_SENSOR         , 8   , NULL        , new int(2)    , NULL                  , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},
+  {"MS_3"   , MOTION_SENSOR       , MH_SERIES_WIRE_SENSOR         , 9   , NULL        , new int(3)    , NULL                  , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},
+  {"MS_4"   , MOTION_SENSOR       , MH_SERIES_WIRE_SENSOR         , 10  , NULL        , new int(4)    , NULL                  , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},
+  {"MS_5"   , MOTION_SENSOR       , MH_SERIES_WIRE_SENSOR         , 11  , NULL        , new int(5)    , NULL                  , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},
+  {"MS_6"   , MOTION_SENSOR       , MH_SERIES_WIRE_SENSOR         , 12  , NULL        , new int(6)    , NULL                  , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},
+  {"ENB"    , ENTER_BARRIER       , SERVO                         , 13  , NULL        , NULL          , NULL                  , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},
+  {"EXB"    , EXIT_BARRIER        , SERVO                         , 13  , NULL        , NULL          , NULL                  , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},
 };
 
 WiFiClient wifi_client;
@@ -566,10 +575,10 @@ void setup() {
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }
-
-  setup_devices();
   setup_wifi();
   setup_mqtt();
+  connect_mqtt();
+  setup_devices();
   //setup_cwo_sensor();
 }
 
