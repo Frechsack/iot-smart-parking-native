@@ -94,6 +94,11 @@ struct Device {
    * Invertiert die Zustände für einen Sensor, sollte er über Wahrheitswerte gesteuert werden.
   */
   const boolean* is_inverted;
+
+  /**
+   * Die Optionale Zonenzuordnung eines Geräts.
+   */
+  const int* zone_nr; 
 };
 
 
@@ -107,37 +112,37 @@ const int DEVICES_LENGTH = 23;
  * Die Virtuellen Geräte.
  */
 Device DEVICES[DEVICES_LENGTH] = {
-  /*MAC       LOGICAL_TYPE        PHYSICAL_TYPE                   PIN   IDENTIFIER    PARKING_LOT_NR     LATEST_STATUS  NEOPIXEL  SERVO  NEOXPIXEL_PIXEL_COUNT  ADDRESS        DISPLAY*/
+  /*MAC       LOGICAL_TYPE        PHYSICAL_TYPE                   PIN   IDENTIFIER    PARKING_LOT_NR     LATEST_STATUS  NEOPIXEL  SERVO  NEOXPIXEL_PIXEL_COUNT  ADDRESS        DISPLAY  IS_INVERTED   ZONE_NR*/
   /* Parkleitlichter */
-  {"PGL_1"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(0)   , new int(1)    , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
-  {"PGL_2"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(1)   , NULL          , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
-  {"PGL_3"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(2)   , new int(2)    , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
-  {"PGL_4"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(3)   , new int(3)    , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
-  {"PGL_5"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(4)   , NULL          , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
-  {"PGL_6"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(6)   , NULL          , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
-  {"PGL_7"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(7)   , new int(4)    , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
-  {"PGL_8"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(8)   , new int(5)    , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
-  {"PGL_9"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(9)   , NULL          , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
-  {"PGL_10" , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(10)  , new int(6)    , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL},
+  {"PGL_1"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(0)   , new int(1)    , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL    , NULL             , new int(1)  },
+  {"PGL_2"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(1)   , NULL          , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL    , NULL             , new int(5)  },
+  {"PGL_3"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(2)   , new int(2)    , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL    , NULL             , new int(9) },
+  {"PGL_4"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(3)   , new int(3)    , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL    , NULL             , new int(10)  },
+  {"PGL_5"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(4)   , NULL          , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL    , NULL             , new int(6)  },
+  {"PGL_6"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(6)   , NULL          , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL    , NULL             , new int(7)  },
+  {"PGL_7"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(7)   , new int(4)    , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL    , NULL             , new int(11)  },
+  {"PGL_8"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(8)   , new int(5)    , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL    , NULL             , new int(12)  },
+  {"PGL_9"  , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(9)   , NULL          , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL    , NULL             , new int(8)  },
+  {"PGL_10" , PARKING_GUIDE_LAMP    , ADAFRUIT_NEOPIXEL           , 43   , new int(10)  , new int(6)    , NULL        , NULL    , NULL  , new int(20)         , NULL          , NULL    , NULL             , new int(4)  },
   /* Display, Anzahl freie Parkplätze */
-  {"DIS_1"  , SPACE_DISPLAY         , ADAFRUIT_7_SEGMENT_DISPLAY  , -1  , new int(0)    , NULL          , NULL        , NULL    , NULL  , NULL                , new int(0x70) , NULL}, 
+  {"DIS_1"  , SPACE_DISPLAY         , ADAFRUIT_7_SEGMENT_DISPLAY  , -1  , new int(0)    , NULL          , NULL        , NULL    , NULL  , NULL                , new int(0x70) , NULL    , NULL             , NULL        }, 
   /* Bewegungssensoren */
-  {"WS_1"   , MOTION_SENSOR         , MH_SERIES_WIRE_SENSOR       , 13  , NULL          , new int(1)    , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},
-  {"WS_2"   , MOTION_SENSOR         , MH_SERIES_WIRE_SENSOR       , 8   , NULL          , new int(2)    , NULL        , NULL    , NULL  , NULL                , NULL          , NULL}, 
-  {"WS_3"   , MOTION_SENSOR         , MH_SERIES_WIRE_SENSOR       , 9   , NULL          , new int(3)    , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},
-  {"WS_4"   , MOTION_SENSOR         , MH_SERIES_WIRE_SENSOR       , 10  , NULL          , new int(4)    , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},
-  {"WS_5"   , MOTION_SENSOR         , MH_SERIES_WIRE_SENSOR       , 11  , NULL          , new int(5)    , NULL        , NULL    , NULL  , NULL                , NULL          , NULL}, 
-  {"WS_6"   , MOTION_SENSOR         , MH_SERIES_WIRE_SENSOR       , 12  , NULL          , new int(6)    , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},
+  {"WS_1"   , MOTION_SENSOR         , MH_SERIES_WIRE_SENSOR       , 13  , NULL          , new int(1)    , NULL        , NULL    , NULL  , NULL                , NULL          , NULL    , NULL             , NULL        },
+  {"WS_2"   , MOTION_SENSOR         , MH_SERIES_WIRE_SENSOR       , 8   , NULL          , new int(2)    , NULL        , NULL    , NULL  , NULL                , NULL          , NULL    , NULL             , NULL        }, 
+  {"WS_3"   , MOTION_SENSOR         , MH_SERIES_WIRE_SENSOR       , 9   , NULL          , new int(3)    , NULL        , NULL    , NULL  , NULL                , NULL          , NULL    , NULL             , NULL        },
+  {"WS_4"   , MOTION_SENSOR         , MH_SERIES_WIRE_SENSOR       , 10  , NULL          , new int(4)    , NULL        , NULL    , NULL  , NULL                , NULL          , NULL    , NULL             , NULL        },
+  {"WS_5"   , MOTION_SENSOR         , MH_SERIES_WIRE_SENSOR       , 11  , NULL          , new int(5)    , NULL        , NULL    , NULL  , NULL                , NULL          , NULL    , NULL             , NULL        }, 
+  {"WS_6"   , MOTION_SENSOR         , MH_SERIES_WIRE_SENSOR       , 12  , NULL          , new int(6)    , NULL        , NULL    , NULL  , NULL                , NULL          , NULL    , NULL             , NULL        },
   /* Co2 Sensor */
-  {"CWO"    , CWO_SENSOR            , ADAFRUIT_SGP30              , -1  , NULL          , NULL          , NULL        , NULL    , NULL  , NULL                , new int(0x70) , NULL}, 
+  {"CWO"    , CWO_SENSOR            , ADAFRUIT_SGP30              , -1  , NULL          , NULL          , NULL        , NULL    , NULL  , NULL                , new int(0x70) , NULL    , NULL             , NULL        }, 
   /* Ein- & Ausfahrtsschranke */
-  {"ENT"     , ENTER_BARRIER        , SERVO                       , 45  , NULL          , NULL          , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},
-  {"EXT"     , EXIT_BARRIER         , SERVO                       , 44  , NULL          , NULL          , NULL        , NULL    , NULL  , NULL                , NULL          , NULL}, 
+  {"ENT"     , ENTER_BARRIER        , SERVO                       , 45  , NULL          , NULL          , NULL        , NULL    , NULL  , NULL                , NULL          , NULL    , NULL             , NULL        },
+  {"EXT"     , EXIT_BARRIER         , SERVO                       , 44  , NULL          , NULL          , NULL        , NULL    , NULL  , NULL                , NULL          , NULL    , NULL             , NULL        }, 
   /* Alarm*/
-  {"ALR"     , ALARM                , SIMPLE                      , 7   , NULL          , NULL          , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},
+  {"ALR"     , ALARM                , SIMPLE                      , 7   , NULL          , NULL          , NULL        , NULL    , NULL  , NULL                , NULL          , NULL    , NULL             , NULL        },
   /* Ein- & Aufahrtslicht */
-  {"SPL_1"   , SPACE_EXIT_LIGHT      , SIMPLE                     , 5   , NULL          , NULL          , NULL        , NULL    , NULL  , NULL                , NULL          , NULL, new boolean(true)},   
-  {"SPL_2"   , SPACE_ENTER_LIGHT     , SIMPLE                     , 6   , NULL          , NULL          , NULL        , NULL    , NULL  , NULL                , NULL          , NULL},    
+  {"SPL_1"   , SPACE_EXIT_LIGHT      , SIMPLE                     , 5   , NULL          , NULL          , NULL        , NULL    , NULL  , NULL                , NULL          , NULL    , new boolean(true), NULL        },   
+  {"SPL_2"   , SPACE_ENTER_LIGHT     , SIMPLE                     , 6   , NULL          , NULL          , NULL        , NULL    , NULL  , NULL                , NULL          , NULL    , NULL             , NULL        },    
 };
 
 
@@ -374,9 +379,10 @@ void send_status(const String &mac, const String &status){
  * @param parking_lot_nr Die optionale Parkplatznummer.
  * @param parent_mac Das optionale übergeordnete Gerät.
  */
-void send_register(const String &mac, const LogicalType &type, const int* parking_lot_number){
+void send_register(const String &mac, const LogicalType &type, const int* parking_lot_number, const int* zone_nr){
   String parking_lot_number_as_string = parking_lot_number == NULL ? "": String(*parking_lot_number);
-  String message = mac + ":" + logical_type_to_string(type) + ":" + parking_lot_number_as_string;
+  String zone_nr_as_string = zone_nr == NULL ? "" : String(*zone_nr);
+  String message = mac + ":" + logical_type_to_string(type) + ":" + parking_lot_number_as_string + ":" + zone_nr_as_string;
   Serial.println("Send register, message: \"" + message + "\"");
   mqtt_client.publish("register", message);
 }
@@ -387,7 +393,7 @@ void send_register(const String &mac, const LogicalType &type, const int* parkin
 void process_scan(){
   // Verschicke zuerst nur jene ohne parent
   for(int i = 0; i < DEVICES_LENGTH; i++)
-    send_register(DEVICES[i].mac,DEVICES[i].logical_type,DEVICES[i].parking_lot_nr); 
+    send_register(DEVICES[i].mac,DEVICES[i].logical_type,DEVICES[i].parking_lot_nr, DEVICES[i].zone_nr); 
 };
 
 /**
