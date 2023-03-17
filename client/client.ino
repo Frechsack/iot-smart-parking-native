@@ -152,7 +152,7 @@ MQTTClient mqtt_client;
 /**
  * Der Co2-Sensor. Pro Board kann nur ein solcher Sensor angeschlossen werden, daher global deklariert und nicht per Co2-Sensor.
  */
-const Adafruit_SGP30 cwo_sensor;
+Adafruit_SGP30 cwo_sensor;
 
 /**
  * Konvertiert ein enum des Typs "DeviceTypeName" in einen String.
